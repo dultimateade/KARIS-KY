@@ -29,7 +29,7 @@ independently and recompute the hash to confirm the anchor matches.
 | Auth | `InvoiceEscrow::admin` |
 | Write policy | **Single-set** — panics if already bound |
 | Storage key | `DataKey::PrimaryAttestationHash` |
-| Event | `PrimaryAttestationBound { invoice_id, digest }` |
+| Event | `AttestationBoundEvt` (new) and `PrimaryAttestationBound` (legacy) |
 
 Binds the canonical compliance document digest for this escrow instance. Intended for the
 initial KYC/KYB bundle that covers the SME and the invoice at origination.
@@ -57,6 +57,23 @@ an unchanged document at a new ledger timestamp via the event).
 The 33rd append panics with `"attestation append log capacity reached"`. If more than 32
 incremental anchors are needed, deploy a new escrow instance or extend the log off-chain using
 the event stream.
+
+### TypeScript SDK
+
+With an `EscrowClient` configured for the target contract, hash the canonical document bundle
+and append the resulting 32-byte digest. Node.js `Buffer` values are accepted because `Buffer`
+extends `Uint8Array`.
+
+```ts
+import { createHash } from "node:crypto";
+
+const digest: Uint8Array = createHash("sha256").update(canonicalBundle).digest();
+await client.appendAttestationDigest(digest);
+```
+
+The SDK checks the digest length before making an RPC call and throws the exported
+`ValidationError` if it is not exactly 32 bytes. RPC errors, including rate limits, are
+propagated unchanged.
 
 ### `revoke_attestation_digest(index: u32)`
 
@@ -97,10 +114,11 @@ Off-chain                              On-chain
    internal document store.
                                        4. Admin calls:
                                           bind_primary_attestation_hash(digest)
-                                          → PrimaryAttestationBound event emitted
+                                          → AttestationBoundEvt emitted with hash + ledger timestamp
+                                          → PrimaryAttestationBound legacy event emitted
                                           → DataKey::PrimaryAttestationHash set (immutable)
 
-5. Indexer reads PrimaryAttestationBound.
+5. Indexer reads AttestationBoundEvt.
    Off-chain verifier fetches bundle,
    recomputes SHA-256, confirms match.
 ```
@@ -228,6 +246,21 @@ Off-chain                              On-chain
 
 The original digest at index N remains in the append log for auditability. Indexers
 consume `AttestationDigestRevoked` events to compute the effective (non-revoked) chain.
+
+## TTL and Storage Expiry Risk
+
+The primary attestation hash and append log are stored in **instance storage**. Soroban
+instance storage has a ledger TTL; if it expires without being extended, its entries can be
+archived or evicted. The attestation log may then become unavailable along with other
+instance state, so an on-chain append log is not by itself a permanent compliance archive.
+
+For active escrows, monitor the instance TTL and call the permissionless `bump_ttl` entrypoint
+before the TTL expires, on a recurring schedule appropriate to the network's TTL limits. The
+instance TTL extension applies to all instance-storage keys, including the attestation log;
+the `allowlisted` argument may be empty when only the instance TTL needs extending. See
+[`escrow-gas-storage-notes.md`](escrow-gas-storage-notes.md) for the entrypoint's behavior.
+Retain the `AttestationDigestAppended` event stream and canonical off-chain documents in
+durable storage as an independent audit record.
 
 ## Security notes
 

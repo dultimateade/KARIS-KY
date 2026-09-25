@@ -10,16 +10,24 @@
 
 import { EscrowClient, SorobanRpcClient } from "./client";
 import {
-  EscrowStatus,
-  InitParams,
-  InvoiceEscrow,
-  YieldTier,
-  FundingCloseSnapshot,
-  EscrowSummary,
-  SCHEMA_VERSION,
-  CONTRACT_INTERFACE_VERSION,
-  toBaseUnits,
-} from "./types";
+  EscrowClient,
+  type EscrowEvent,
+  type SorobanEventQuery,
+  type SorobanRpcClient,
+  ValidationError,
+} from "./index";
+
+const event = (name: string, ledger: number): EscrowEvent => ({
+  id: `${name}-${ledger}`,
+  type: "contract",
+  contract_id: "CESCROW",
+  ledger,
+  ledger_closed_at: "2026-01-01T00:00:00Z",
+  paging_token: `${ledger}-token`,
+  topics: [name],
+  value: {},
+  name,
+});
 
 // ---------------------------------------------------------------------------
 // Mock Soroban RPC Client
@@ -1021,4 +1029,42 @@ describe("EscrowClient Integration Tests", () => {
       await expect(stub.simulate(CONTRACT_ID, "nonexistent_query", [])).rejects.toThrow();
     });
   });
+});
+
+test("appendAttestationDigest invokes the contract with a 32-byte digest", async () => {
+  const rpc: SorobanRpcClient = {
+    invoke: jest.fn().mockResolvedValue(undefined),
+    simulate: jest.fn(),
+    getLedger: jest.fn(),
+  };
+  const client = new EscrowClient({ rpcUrl: "http://localhost", networkPassphrase: "test" }, rpc);
+  const digest = new Uint8Array(32).fill(7);
+
+  await client.appendAttestationDigest(digest);
+
+  expect(rpc.invoke).toHaveBeenCalledWith("", "append_attestation_digest", [digest], undefined);
+});
+
+test("appendAttestationDigest rejects invalid digest lengths before invoking RPC", async () => {
+  const rpc: SorobanRpcClient = {
+    invoke: jest.fn(),
+    simulate: jest.fn(),
+    getLedger: jest.fn(),
+  };
+  const client = new EscrowClient({ rpcUrl: "http://localhost", networkPassphrase: "test" }, rpc);
+
+  await expect(client.appendAttestationDigest(new Uint8Array(31))).rejects.toBeInstanceOf(ValidationError);
+  expect(rpc.invoke).not.toHaveBeenCalled();
+});
+
+test("appendAttestationDigest passes rate-limit errors through unchanged", async () => {
+  const rateLimitError = new Error("rate limit exceeded");
+  const rpc: SorobanRpcClient = {
+    invoke: jest.fn().mockRejectedValue(rateLimitError),
+    simulate: jest.fn(),
+    getLedger: jest.fn(),
+  };
+  const client = new EscrowClient({ rpcUrl: "http://localhost", networkPassphrase: "test" }, rpc);
+
+  await expect(client.appendAttestationDigest(new Uint8Array(32))).rejects.toBe(rateLimitError);
 });
