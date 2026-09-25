@@ -112,7 +112,7 @@ fn typed_error_codes_cover_allowlist_attestation_and_dust_guards() {
     client.bind_primary_attestation_hash(&digest);
     assert_contract_error(
         client.try_bind_primary_attestation_hash(&digest),
-        EscrowError::PrimaryAttestationAlreadyBound,
+        EscrowError::AttestationHashAlreadyBound,
     );
 
     assert_contract_error(
@@ -159,6 +159,7 @@ fn escrow_error_discriminants_match_canonical_table() {
         (EscrowError::SweepExceedsLiabilityFloor, 42),
         (EscrowError::PrimaryAttestationAlreadyBound, 50),
         (EscrowError::AttestationAppendLogCapacityReached, 51),
+        (EscrowError::AttestationHashAlreadyBound, 53),
         (EscrowError::CollateralAmountNotPositive, 60),
         (EscrowError::CollateralAssetEmpty, 61),
         (EscrowError::CollateralTimestampBackwards, 62),
@@ -407,7 +408,7 @@ fn typed_error_codes_cover_range_boundaries() {
     attest_client.bind_primary_attestation_hash(&soroban_sdk::Bytes::from_array(&env, &[1u8; 32]));
     assert_contract_error(
         attest_client.try_bind_primary_attestation_hash(&soroban_sdk::Bytes::from_array(&env, &[1u8; 32])),
-        EscrowError::PrimaryAttestationAlreadyBound,
+        EscrowError::AttestationHashAlreadyBound,
     );
     for i in 0u8..MAX_ATTESTATION_APPEND_ENTRIES as u8 {
         attest_client.append_attestation_digest(&symbol_short!(""), &BytesN::from_array(&env, &[i; 32]));

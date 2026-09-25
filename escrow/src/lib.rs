@@ -319,12 +319,14 @@ pub enum EscrowError {
     /// `balance - sweep_amt` must be `>= funded_amount - distributed_principal`.
     SweepExceedsLiabilityFloor = 42,
 
-    /// [`LiquifactEscrow::bind_primary_attestation_hash`] called when a primary hash exists.
+    /// Legacy duplicate-bind code retained for compatibility; no longer emitted.
     PrimaryAttestationAlreadyBound = 50,
     /// [`LiquifactEscrow::append_attestation_digest`] exceeded [`MAX_ATTESTATION_APPEND_ENTRIES`].
     AttestationAppendLogCapacityReached = 51,
     /// [`LiquifactEscrow::bind_primary_attestation_hash`] received a digest that is not exactly 32 bytes.
     InvalidAttestationHashLength = 52,
+    /// [`LiquifactEscrow::bind_primary_attestation_hash`] called when a primary hash exists.
+    AttestationHashAlreadyBound = 53,
 
     /// [`LiquifactEscrow::record_sme_collateral_commitment`] received a non-positive amount.
     CollateralAmountNotPositive = 60,
@@ -3463,10 +3465,18 @@ impl LiquifactEscrow {
     /// rather than an opaque panic, giving callers a recoverable signal.
     ///
     /// # Errors
+    /// - [`EscrowError::AttestationHashAlreadyBound`] if a primary hash already exists.
     /// - [`EscrowError::InvalidAttestationHashLength`] if `digest.len() != 32`.
-    /// - [`EscrowError::PrimaryAttestationAlreadyBound`] if a primary hash already exists.
     /// - [`EscrowError::EscrowNotInitialized`] if called before `init`.
     pub fn bind_primary_attestation_hash(env: Env, digest: Bytes) {
+        ensure(
+            &env,
+            !env.storage()
+                .instance()
+                .has(&DataKey::PrimaryAttestationHash),
+            EscrowError::AttestationHashAlreadyBound,
+        );
+
         // Length validation: must be exactly 32 bytes (e.g. SHA-256).
         // Emits a typed error so callers receive error code 52 instead of an opaque panic.
         ensure(
@@ -3479,13 +3489,6 @@ impl LiquifactEscrow {
             .unwrap_or_else(|_| fail(&env, EscrowError::InvalidAttestationHashLength));
 
         let escrow = Self::load_escrow_require_admin(&env);
-        ensure(
-            &env,
-            !env.storage()
-                .instance()
-                .has(&DataKey::PrimaryAttestationHash),
-            EscrowError::PrimaryAttestationAlreadyBound,
-        );
         env.storage()
             .instance()
             .set(&DataKey::PrimaryAttestationHash, &digest);

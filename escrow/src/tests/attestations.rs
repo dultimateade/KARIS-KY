@@ -2,7 +2,7 @@
 //! `append_attestation_digest` (bounded by [`MAX_ATTESTATION_APPEND_ENTRIES`]).
 //!
 //! These tests prove the two chain-anchor invariants:
-//! 1. The primary hash is **write-once** — a second bind panics regardless of the digest value.
+//! 1. The primary hash is **write-once** — a second bind returns a typed error regardless of the digest value.
 //! 2. The append log is **capacity-bounded** — the 33rd entry panics; the 32nd succeeds.
 //!
 //! Neither entrypoint stores ZK proofs or performs off-chain verification. They record a
@@ -96,16 +96,21 @@ fn test_bind_primary_hash_different_digest_panics() {
     client.bind_primary_attestation_hash(&digest(&env, 0x02));
 }
 
-/// A second bind must fail with a typed contract error for the immutability contract.
+/// A second bind with a different digest returns a typed error and preserves the original hash.
 #[test]
-fn test_bind_primary_hash_second_call_fails_with_primary_attestation_already_bound() {
+fn test_bind_primary_hash_second_call_fails_and_preserves_first_value() {
     let env = Env::default();
     let (client, _) = setup_with_init(&env);
-    let d = digest(&env, 0xAB);
-    client.bind_primary_attestation_hash(&d);
+    let first = digest(&env, 0xAB);
+    let replacement = digest(&env, 0xCD);
+    client.bind_primary_attestation_hash(&first);
     assert_contract_error(
-        client.try_bind_primary_attestation_hash(&d),
-        EscrowError::PrimaryAttestationAlreadyBound,
+        client.try_bind_primary_attestation_hash(&replacement),
+        EscrowError::AttestationHashAlreadyBound,
+    );
+    assert_eq!(
+        client.get_primary_attestation_hash(),
+        Some(BytesN::from_array(&env, &[0xABu8; 32]))
     );
 }
 

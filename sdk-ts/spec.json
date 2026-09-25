@@ -471,6 +471,7 @@
       "42": "SweepExceedsLiabilityFloor",
       "50": "PrimaryAttestationAlreadyBound",
       "51": "AttestationAppendLogCapacityReached",
+      "53": "AttestationHashAlreadyBound",
       "60": "CollateralAmountNotPositive",
       "61": "CollateralAssetEmpty",
       "62": "CollateralTimestampBackwards",
