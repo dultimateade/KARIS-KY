@@ -201,6 +201,46 @@ fn test_append_exactly_max_entries_succeeds() {
     );
 }
 
+/// The dedicated read entrypoint returns an empty log before any append.
+#[test]
+fn test_get_attestation_log_empty() {
+    let env = Env::default();
+    let (client, _) = setup_with_init(&env);
+    assert_eq!(client.get_attestation_log().len(), 0);
+}
+
+/// The dedicated read entrypoint returns partial logs in insertion order.
+#[test]
+fn test_get_attestation_log_partial() {
+    let env = Env::default();
+    let (client, _) = setup_with_init(&env);
+    for seed in 0u8..5 {
+        client.append_attestation_digest(&digest_fixed(&env, seed));
+    }
+
+    let log = client.get_attestation_log();
+    assert_eq!(log.len(), 5);
+    for seed in 0u8..5 {
+        assert_eq!(log.get(seed as u32).unwrap(), digest_fixed(&env, seed));
+    }
+}
+
+/// The dedicated read entrypoint returns every entry at maximum capacity.
+#[test]
+fn test_get_attestation_log_full() {
+    let env = Env::default();
+    let (client, _) = setup_with_init(&env);
+    for seed in 0u8..(MAX_ATTESTATION_APPEND_ENTRIES as u8) {
+        client.append_attestation_digest(&digest_fixed(&env, seed));
+    }
+
+    let log = client.get_attestation_log();
+    assert_eq!(log.len(), MAX_ATTESTATION_APPEND_ENTRIES);
+    for seed in 0u8..(MAX_ATTESTATION_APPEND_ENTRIES as u8) {
+        assert_eq!(log.get(seed as u32).unwrap(), digest_fixed(&env, seed));
+    }
+}
+
 /// The 33rd entry must panic — capacity is strictly bounded.
 #[test]
 #[should_panic]

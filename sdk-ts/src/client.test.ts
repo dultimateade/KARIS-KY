@@ -57,3 +57,19 @@ test("fails clearly when getEvents is unavailable", async () => {
   const client = new EscrowClient({ rpcUrl: "http://localhost", networkPassphrase: "test" }, rpc);
   await expect(client.subscribeEscrowEvents().next()).rejects.toThrow("does not support getEvents");
 });
+
+test("reads attestation log as hex-encoded digests", async () => {
+  const digests = ["ab".repeat(32), "cd".repeat(32)];
+  const rpc: SorobanRpcClient = {
+    invoke: jest.fn(),
+    simulate: jest.fn().mockResolvedValue(digests),
+    getLedger: jest.fn(),
+  };
+  const client = new EscrowClient(
+    { rpcUrl: "http://localhost", networkPassphrase: "test", contractId: "CESCROW" },
+    rpc,
+  );
+
+  await expect(client.getAttestationLog()).resolves.toEqual(digests);
+  expect(rpc.simulate).toHaveBeenCalledWith("CESCROW", "get_attestation_log", []);
+});

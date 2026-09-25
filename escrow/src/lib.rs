@@ -3629,6 +3629,11 @@ impl LiquifactEscrow {
         log
     }
 
+    /// Read the complete attestation digest log in insertion order.
+    pub fn get_attestation_log(env: Env) -> Vec<BytesN<32>> {
+        Self::get_attestation_append_log(env)
+    }
+
     // --- Persistent per-investor storage helpers ---
     fn get_persistent_investor_contribution(env: &Env, investor: Address) -> i128 {
         env.storage()

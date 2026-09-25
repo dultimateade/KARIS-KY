@@ -1,11 +1,11 @@
 # Escrow Attestations: KYC/KYB Operational Flows
 
-This document describes how the three attestation entrypoints on the karis-ky escrow contract
+This document describes how the attestation entrypoints on the karis-ky escrow contract
 are used in KYC (Know Your Customer) and KYB (Know Your Business) compliance workflows.
 
 ## What this is — and what it is not
 
-Both entrypoints store a **32-byte digest** (e.g. SHA-256 of an IPFS CID or a document bundle
+The write entrypoints store a **32-byte digest** (e.g. SHA-256 of an IPFS CID or a document bundle
 hash) on-chain. This is a **chain anchor**: a tamper-evident pointer that lets any observer
 confirm that a specific document set existed at a specific ledger sequence.
 
@@ -57,6 +57,18 @@ an unchanged document at a new ledger timestamp via the event).
 The 33rd append panics with `"attestation append log capacity reached"`. If more than 32
 incremental anchors are needed, deploy a new escrow instance or extend the log off-chain using
 the event stream.
+
+### `get_attestation_log() -> Vec<BytesN<32>>`
+
+| Property | Value |
+|---|---|
+| Auth | None (read-only) |
+| Read policy | Returns all digests in insertion order; empty when no entries exist |
+| Storage | Attestation append log |
+
+Provides direct access to the complete append log without exporting the rest of the escrow state.
+The SDK exposes each 32-byte digest as a hex-encoded string, and the REPL command is
+`get_attestation_log`.
 
 ### `revoke_attestation_digest(index: u32)`
 
@@ -258,7 +270,7 @@ consume `AttestationDigestRevoked` events to compute the effective (non-revoked)
   safely assume that once `AttestationDigestRevoked` is observed, it is final.
 
 - **Out-of-range rejection:** revoking a non-existent index panics with `"attestation index
-  out of range"`. The admin must read `get_attestation_append_log` to determine valid indices.
+   out of range"`. The admin can read `get_attestation_log` to determine valid indices.
 
 - **Token economics:** attestation entrypoints do not interact with token balances, funding
   state, or settlement flows. They are metadata-only. See
@@ -271,7 +283,7 @@ consume `AttestationDigestRevoked` events to compute the effective (non-revoked)
 
 ## Test coverage
 
-Attestation behavior is covered in [`escrow/src/test/attestations.rs`](../escrow/src/test/attestations.rs):
+Attestation behavior is covered in [`escrow/src/tests/attestations.rs`](../escrow/src/tests/attestations.rs):
 
 | Test | What it proves |
 |---|---|
@@ -284,6 +296,9 @@ Attestation behavior is covered in [`escrow/src/test/attestations.rs`](../escrow
 | `test_append_single_entry_stored` | Single append stored at index 0 |
 | `test_append_multiple_entries_ordered` | Insertion order preserved |
 | `test_append_exactly_max_entries_succeeds` | 32nd entry succeeds (boundary inclusive) |
+| `test_get_attestation_log_empty` | Dedicated getter returns an empty log before any append |
+| `test_get_attestation_log_partial` | Dedicated getter returns partial logs in insertion order |
+| `test_get_attestation_log_full` | Dedicated getter returns all 32 entries |
 | `test_append_beyond_max_panics` | 33rd entry panics |
 | `test_append_duplicate_digest_allowed` | Duplicate digests accepted |
 | `test_append_non_admin_panics` | Non-admin append is rejected |

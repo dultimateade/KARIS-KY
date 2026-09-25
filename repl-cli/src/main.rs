@@ -4,6 +4,7 @@
 //! - `get_escrow`: Fetch current escrow state
 //! - `get_version`: Fetch schema version
 //! - `is_dispute_paused`: Check if dispute pause is active
+//! - `get_attestation_log`: Fetch attestation digests
 //! - `export_state`: Export complete state snapshot
 //!
 //! All output is pretty-printed JSON for easy parsing and display.
@@ -47,6 +48,8 @@ enum ReplCommand {
     GetVersion,
     /// Check if dispute pause is active
     IsDisputePaused,
+    /// Fetch attestation digests
+    GetAttestationLog,
     /// Export complete state snapshot
     ExportState,
     /// Show help
@@ -66,6 +69,9 @@ impl ReplCommand {
             Some("get_escrow") | Some("get-escrow") => ReplCommand::GetEscrow,
             Some("get_version") | Some("get-version") => ReplCommand::GetVersion,
             Some("is_dispute_paused") | Some("is-dispute-paused") => ReplCommand::IsDisputePaused,
+            Some("get_attestation_log") | Some("get-attestation-log") => {
+                ReplCommand::GetAttestationLog
+            }
             Some("export_state") | Some("export-state") => ReplCommand::ExportState,
             Some("help") => {
                 let topic = parts.get(1).map(|s| s.to_string());
@@ -115,6 +121,7 @@ impl ReplContext {
             ReplCommand::GetEscrow => self.cmd_get_escrow().await,
             ReplCommand::GetVersion => self.cmd_get_version().await,
             ReplCommand::IsDisputePaused => self.cmd_is_dispute_paused().await,
+            ReplCommand::GetAttestationLog => self.cmd_get_attestation_log().await,
             ReplCommand::ExportState => self.cmd_export_state().await,
             ReplCommand::Help { topic } => Ok(self.cmd_help(topic)),
             ReplCommand::Quit => Err("QUIT".to_string()),
@@ -181,6 +188,16 @@ impl ReplContext {
         }
     }
 
+    /// Simulate get_attestation_log (mock data for demo)
+    async fn cmd_get_attestation_log(&self) -> Result<String, String> {
+        if self.mock_mode {
+            Ok(serde_json::to_string_pretty(&json!([])).unwrap())
+        } else {
+            Err("get_attestation_log not connected to live RPC yet. Use --rpc-url to override."
+                .to_string())
+        }
+    }
+
     /// Simulate export_state (mock data for demo)
     async fn cmd_export_state(&self) -> Result<String, String> {
         if self.mock_mode {
@@ -234,6 +251,12 @@ impl ReplContext {
                      Example: escrow> is_dispute_paused"
                         .to_string()
                 }
+                "get_attestation_log" => {
+                    "get_attestation_log — Fetch attestation digests in insertion order\n\
+                     Returns: JSON array of 32-byte digests encoded as hex\n\
+                     Example: escrow> get_attestation_log"
+                        .to_string()
+                }
                 "export_state" => {
                     "export_state — Export complete escrow state snapshot\n\
                      Useful for backup, migration, or audit\n\
@@ -242,7 +265,7 @@ impl ReplContext {
                         .to_string()
                 }
                 _ => format!(
-                    "Unknown help topic: '{}'. Available topics: get_escrow, get_version, is_dispute_paused, export_state",
+                    "Unknown help topic: '{}'. Available topics: get_escrow, get_version, is_dispute_paused, get_attestation_log, export_state",
                     t
                 ),
             },
@@ -252,11 +275,13 @@ impl ReplContext {
                    get_escrow       — Fetch current escrow state\n\
                    get_version      — Fetch contract schema version\n\
                    is_dispute_paused — Check if dispute pause is active\n\
+                   get_attestation_log — Fetch attestation digests\n\
                    export_state     — Export complete state snapshot\n\
                    help [command]   — Show this help or detailed command help\n\
                    quit / exit      — Exit REPL\n\n\
                  Examples:\n\
                    escrow> get_escrow\n\
+                   escrow> get_attestation_log\n\
                    escrow> export_state | jq .\n\
                    escrow> help export_state\n\
                  \n\
@@ -345,6 +370,12 @@ mod tests {
     fn test_parse_export_state() {
         let cmd = ReplCommand::parse("export_state");
         assert!(matches!(cmd, ReplCommand::ExportState));
+    }
+
+    #[test]
+    fn test_parse_get_attestation_log() {
+        let cmd = ReplCommand::parse("get_attestation_log");
+        assert!(matches!(cmd, ReplCommand::GetAttestationLog));
     }
 
     #[test]
