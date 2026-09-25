@@ -22,12 +22,13 @@ independently and recompute the hash to confirm the anchor matches.
 
 ## Entrypoints
 
-### `bind_primary_attestation_hash(digest: BytesN<32>)`
+### `bind_primary_attestation_hash(digest: Bytes)`
 
 | Property | Value |
 |---|---|
 | Auth | `InvoiceEscrow::admin` |
 | Write policy | **Single-set** — panics if already bound |
+| Validation | `digest` must be exactly 32 bytes; otherwise returns `EscrowError::InvalidAttestationHashLength` (code 52) |
 | Storage key | `DataKey::PrimaryAttestationHash` |
 | Event | `PrimaryAttestationBound { invoice_id, digest }` |
 

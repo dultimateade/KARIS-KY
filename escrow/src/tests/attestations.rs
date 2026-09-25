@@ -52,6 +52,21 @@ fn test_bind_primary_hash_stores_and_reads() {
     assert_eq!(stored, BytesN::from_array(&env, &[0xABu8; 32]));
 }
 
+/// Exactly 32 bytes is the inclusive valid length boundary.
+#[test]
+fn test_bind_primary_hash_32_bytes_succeeds() {
+    let env = Env::default();
+    let (client, _) = setup_with_init(&env);
+    let digest = Bytes::from_array(&env, &[0x32u8; 32]);
+
+    client.bind_primary_attestation_hash(&digest);
+
+    assert_eq!(
+        client.get_primary_attestation_hash(),
+        Some(BytesN::from_array(&env, &[0x32u8; 32]))
+    );
+}
+
 /// Before any bind the getter returns `None`.
 #[test]
 fn test_get_primary_hash_none_before_bind() {
