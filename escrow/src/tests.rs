@@ -8,7 +8,7 @@
 )]
 #[allow(unused_imports)]
 use super::{
-    AttestationDigestRevoked, CollateralRecordedEvt, DataKey, EscrowError, EscrowFunded,
+    AttestationBoundEvt, AttestationDigestRevoked, CollateralRecordedEvt, DataKey, EscrowError, EscrowFunded,
     EscrowInitialized, FundingTargetUpdated, LiquifactEscrow, LiquifactEscrowClient,
     MaxUniqueInvestorsCapLowered, YieldClaimDelegationRevoked, YieldClaimDelegationSet, YieldTier,
     MAX_ATTESTATION_APPEND_ENTRIES, MAX_DUST_SWEEP_AMOUNT, MAX_FUND_BATCH, SCHEMA_VERSION,
@@ -51,7 +51,6 @@ mod coverage;
 mod dos_analysis;
 mod external_calls;
 mod external_calls_mocked;
-mod validation;
 mod funding;
 mod health_and_events;
 mod init;
@@ -63,6 +62,7 @@ mod secure_rng;
 mod settlement;
 mod tokenomics;
 mod upgrade_compat;
+mod validation;
 mod yield_distribution;
 
 /// Registers a new escrow contract instance and returns its contract id.
@@ -191,7 +191,8 @@ pub fn init_and_fund_with_real_token<'a>(
         &None,
         &None,
         &None,
-        &None,        &None,
+        &None,
+        &None,
         &None,
         &None,
         &None,

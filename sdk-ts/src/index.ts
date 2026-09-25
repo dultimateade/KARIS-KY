@@ -4,6 +4,7 @@
 
 export {
   EscrowClient,
+  ValidationError,
   type EscrowClientConfig,
   type SorobanRpcClient,
   type SorobanEventFilter,
@@ -32,10 +33,12 @@ export {
   type FundingCloseSnapshot,
   type SmeCollateralCommitment,
   type EscrowSummary,
+  type EscrowSnapshot,
   type ErrorDiagnostic,
   type EscrowTemplate,
   type InitParams,
   type SorobanResult,
+  type AttestationBoundEvt,
   type EscrowEvent,
   type SorobanEventPage,
   type EscrowEventSubscriptionOptions,
