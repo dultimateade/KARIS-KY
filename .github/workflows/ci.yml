@@ -68,6 +68,22 @@ jobs:
             --lib escrow/src/lib.rs
 
       # -----------------------------------------------------------------------
+      # Schema version compatibility matrix validation
+      # -----------------------------------------------------------------------
+      #
+      # Validates that SCHEMA_VERSION in escrow/src/lib.rs matches the latest
+      # entry in docs/VERSION_INTEROPERABILITY_MATRIX.md. Catches drift that
+      # could lead operators to attempt unsupported upgrade paths.
+
+      - name: Validate schema version matrix
+        run: |
+          python3 scripts/validate_schema_version_matrix.py
+
+      - name: Test schema version matrix validation
+        run: |
+          python3 scripts/test_validate_schema_version_matrix.py
+
+      # -----------------------------------------------------------------------
       # WASM size tracking
       # -----------------------------------------------------------------------
 
