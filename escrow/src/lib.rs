@@ -5265,7 +5265,7 @@ impl LiquifactEscrow {
     /// This is a read-only operation; no state is mutated. The snapshot can be serialized
     /// and stored off-chain or imported onto a fresh contract instance via [`import_state`].
     ///
-    /// **Authorization:** None (read-only).
+    /// **Authorization:** Current [`InvoiceEscrow::admin`].
     ///
     /// **Returns:** [`EscrowSnapshot`] with all escrow metadata, funding close snapshot, attestations, etc.
     ///
@@ -5277,7 +5277,7 @@ impl LiquifactEscrow {
     /// - Collateral commitment and pending admin.
     /// - SHA-256 checksum of exported fields (for integrity).
     pub fn export_state(env: Env) -> EscrowSnapshot {
-        let escrow = Self::get_escrow(env.clone());
+        let escrow = Self::load_escrow_require_admin(&env);
         let schema_version: u32 = env
             .storage()
             .instance()
@@ -5316,11 +5316,7 @@ impl LiquifactEscrow {
             .instance()
             .get(&DataKey::PrimaryAttestationHash);
 
-        let attestation_log: Vec<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&DataKey::AttestationAppendLog)
-            .unwrap_or_else(|| Vec::new(&env));
+        let attestation_log = Self::get_attestation_append_log(env.clone());
 
         let funding_token = Self::funding_token_or_fail(&env);
         let treasury = Self::treasury_or_fail(&env);
@@ -5379,17 +5375,7 @@ impl LiquifactEscrow {
 
         // Compute SHA-256 checksum of all exported fields for integrity verification.
         // This is deterministic across identical state snapshots.
-        let checksum_data = env.crypto().sha256(&Bytes::new(
-            &env,
-            &[
-                // Simplified checksum: hash the invoice_id and status as a proxy for all state
-                escrow.invoice_id.to_string().as_bytes().clone(),
-            ],
-        ));
-        let checksum: BytesN<32> = checksum_data.try_into().unwrap_or(BytesN::<32>::from_array(
-            &env,
-            &[0u8; 32],
-        ));
+        let checksum = Self::snapshot_checksum(&env, &escrow, schema_version);
 
         EscrowSnapshot {
             escrow,
@@ -5415,6 +5401,97 @@ impl LiquifactEscrow {
             pending_admin,
             checksum,
         }
+    }
+
+    /// Restore an exported instance snapshot onto a fresh contract instance.
+    ///
+    /// **Authorization:** The admin embedded in the snapshot.
+    pub fn import_state(env: Env, snapshot: EscrowSnapshot) {
+        ensure(
+            &env,
+            !env.storage().instance().has(&DataKey::Escrow),
+            EscrowError::ImportAlreadyInitialized,
+        );
+        ensure(
+            &env,
+            snapshot.schema_version == SCHEMA_VERSION,
+            EscrowError::ImportSchemaMismatch,
+        );
+        ensure(
+            &env,
+            snapshot.checksum
+                == Self::snapshot_checksum(&env, &snapshot.escrow, snapshot.schema_version),
+            EscrowError::ImportChecksumMismatch,
+        );
+        snapshot.escrow.admin.require_auth();
+        ensure(
+            &env,
+            snapshot.attestation_log.len() <= MAX_ATTESTATION_APPEND_ENTRIES,
+            EscrowError::AttestationAppendLogCapacityReached,
+        );
+
+        let storage = env.storage().instance();
+        storage.set(&DataKey::Escrow, &snapshot.escrow);
+        storage.set(&DataKey::Version, &snapshot.schema_version);
+        storage.set(&DataKey::FundingToken, &snapshot.funding_token);
+        storage.set(&DataKey::Treasury, &snapshot.treasury);
+        storage.set(&DataKey::MinContributionFloor, &snapshot.min_contribution_floor);
+        storage.set(&DataKey::UniqueFunderCount, &snapshot.unique_funder_count);
+        storage.set(&DataKey::LegalHold, &snapshot.legal_hold);
+        storage.set(&DataKey::LegalHoldClearDelay, &snapshot.legal_hold_clear_delay);
+        storage.set(&DataKey::AllowlistActive, &snapshot.allowlist_active);
+        storage.set(&DataKey::DistributedPrincipal, &snapshot.distributed_principal);
+
+        if let Some(value) = snapshot.registry {
+            storage.set(&DataKey::RegistryRef, &value);
+        }
+        if let Some(value) = snapshot.yield_tiers {
+            storage.set(&DataKey::YieldTierTable, &value);
+        }
+        if let Some(value) = snapshot.funding_close_snapshot {
+            storage.set(&DataKey::FundingCloseSnapshot, &value);
+        }
+        if let Some(value) = snapshot.max_unique_investors_cap {
+            storage.set(&DataKey::MaxUniqueInvestorsCap, &value);
+        }
+        if let Some(value) = snapshot.max_per_investor_cap {
+            storage.set(&DataKey::MaxPerInvestorCap, &value);
+        }
+        if let Some(value) = snapshot.legal_hold_clearable_at {
+            storage.set(&DataKey::LegalHoldClearableAt, &value);
+        }
+        if let Some(value) = snapshot.primary_attestation_hash {
+            storage.set(&DataKey::PrimaryAttestationHash, &value);
+        }
+        if let Some(value) = snapshot.collateral {
+            storage.set(&DataKey::SmeCollateralPledge, &value);
+        }
+        if let Some(value) = snapshot.funding_deadline {
+            storage.set(&DataKey::FundingDeadline, &value);
+        }
+        if let Some(value) = snapshot.pending_admin {
+            storage.set(&DataKey::PendingAdmin, &value);
+        }
+
+        let attestation_count = snapshot.attestation_log.len();
+        for index in 0..attestation_count {
+            storage.set(
+                &DataKey::AttestationLogEntry(index),
+                &snapshot.attestation_log.get(index).unwrap(),
+            );
+        }
+        storage.set(&DataKey::AttestationAppendLogCount, &attestation_count);
+    }
+
+    fn snapshot_checksum(env: &Env, escrow: &InvoiceEscrow, schema_version: u32) -> BytesN<32> {
+        let mut data = [0u8; 56];
+        data[0..4].copy_from_slice(&schema_version.to_be_bytes());
+        data[4..20].copy_from_slice(&escrow.funded_amount.to_be_bytes());
+        data[20..36].copy_from_slice(&escrow.funding_target.to_be_bytes());
+        data[36..44].copy_from_slice(&escrow.yield_bps.to_be_bytes());
+        data[44..48].copy_from_slice(&escrow.status.to_be_bytes());
+        data[48..56].copy_from_slice(&escrow.maturity.to_be_bytes());
+        env.crypto().sha256(&Bytes::from_array(env, &data))
     }
 
     // Old export_escrow_snapshot (internal, kept for backward compatibility)
